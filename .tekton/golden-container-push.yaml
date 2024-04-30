@@ -2,7 +2,7 @@ apiVersion: tekton.dev/v1
 kind: PipelineRun
 metadata:
   annotations:
-    build.appstudio.openshift.io/repo: https://github.com/enterprise-contract/golden-container?rev={{revision}}
+    build.appstudio.openshift.io/repo: https://github.com/yashvardhannanavati/golden-container?rev={{revision}}
     build.appstudio.redhat.com/commit_sha: '{{revision}}'
     build.appstudio.redhat.com/target_branch: '{{target_branch}}'
     pipelinesascode.tekton.dev/max-keep-runs: "3"
@@ -14,21 +14,19 @@ metadata:
     appstudio.openshift.io/component: golden-container
     pipelines.appstudio.openshift.io/type: build
   name: golden-container-on-push
-  namespace: rhtap-contract-tenant
+  namespace: ynanavat-tenant
 spec:
   params:
   - name: dockerfile
     value: Containerfile
   - name: git-url
-    value: '{{repo_url}}'
+    value: '{{source_url}}'
   - name: output-image
-    value: quay.io/redhat-appstudio/ec-golden-image:{{revision}}
+    value: quay.io/redhat-user-workloads/ynanavat-tenant/golden-container/golden-container:{{revision}}
   - name: path-context
     value: .
   - name: revision
     value: '{{revision}}'
-  - name: hermetic
-    value: 'true'
   pipelineSpec:
     finally:
     - name: show-sbom
@@ -59,7 +57,7 @@ spec:
         - name: name
           value: summary
         - name: bundle
-          value: quay.io/redhat-appstudio-tekton-catalog/task-summary:0.2@sha256:bdf58a8a6bf10482fff841ce6c78c54e87d306bc6aae9515821c436d26daff35
+          value: quay.io/redhat-appstudio-tekton-catalog/task-summary:0.2@sha256:535fd85afc42c856364653177edeb05cad9f6b9fa51cc893b7a29b099a6c8555
         - name: kind
           value: task
         resolver: bundles
@@ -95,10 +93,6 @@ spec:
       description: Skip checks against built image
       name: skip-checks
       type: string
-    - default: "true"
-      description: Skip optional checks, set false if you want to run optional checks
-      name: skip-optional
-      type: string
     - default: "false"
       description: Execute the build with network isolation
       name: hermetic
@@ -118,6 +112,11 @@ spec:
     - default: "false"
       description: Build a source image.
       name: build-source-image
+      type: string
+    - default: ""
+      description: Path to a file with build arguments which will be passed to podman
+        during build
+      name: build-args-file
       type: string
     results:
     - description: ""
@@ -144,12 +143,6 @@ spec:
         value: $(params.rebuild)
       - name: skip-checks
         value: $(params.skip-checks)
-      - name: skip-optional
-        value: $(params.skip-optional)
-      - name: pipelinerun-name
-        value: $(context.pipelineRun.name)
-      - name: pipelinerun-uid
-        value: $(context.pipelineRun.uid)
       taskRef:
         params:
         - name: name
@@ -172,7 +165,7 @@ spec:
         - name: name
           value: git-clone
         - name: bundle
-          value: quay.io/redhat-appstudio-tekton-catalog/task-git-clone:0.1@sha256:30709df067659a407968154fd39e99763823d8ecfc6b5cd00a55b68818ec94ba
+          value: quay.io/redhat-appstudio-tekton-catalog/task-git-clone:0.1@sha256:fffe6234a4d60c63b97af86642369e4931a404f6dc8be0d12743f7651a4dc802
         - name: kind
           value: task
         resolver: bundles
@@ -184,33 +177,6 @@ spec:
       workspaces:
       - name: output
         workspace: workspace
-      - name: basic-auth
-        workspace: git-auth
-    - name: clone-repository-arm64
-      params:
-      - name: url
-        value: $(params.git-url)
-      - name: revision
-        value: $(params.revision)
-      runAfter:
-      - init
-      taskRef:
-        params:
-        - name: name
-          value: git-clone
-        - name: bundle
-          value: quay.io/redhat-appstudio-tekton-catalog/task-git-clone:0.1@sha256:30709df067659a407968154fd39e99763823d8ecfc6b5cd00a55b68818ec94ba
-        - name: kind
-          value: task
-        resolver: bundles
-      when:
-      - input: $(tasks.init.results.build)
-        operator: in
-        values:
-        - "true"
-      workspaces:
-      - name: output
-        workspace: workspace-arm64
       - name: basic-auth
         workspace: git-auth
     - name: prefetch-dependencies
@@ -236,10 +202,12 @@ spec:
       workspaces:
       - name: source
         workspace: workspace
-    - name: build-container-amd64
+      - name: git-basic-auth
+        workspace: git-auth
+    - name: build-container
       params:
       - name: IMAGE
-        value: $(params.output-image)-amd64
+        value: $(params.output-image)
       - name: DOCKERFILE
         value: $(params.dockerfile)
       - name: CONTEXT
@@ -252,8 +220,8 @@ spec:
         value: $(params.image-expires-after)
       - name: COMMIT_SHA
         value: $(tasks.clone-repository.results.commit)
-      - name: PLATFORM
-        value: linux/amd64
+      - name: BUILD_ARGS_FILE
+        value: $(params.build-args-file)
       runAfter:
       - prefetch-dependencies
       taskRef:
@@ -273,70 +241,6 @@ spec:
       workspaces:
       - name: source
         workspace: workspace
-    - name: build-container-arm64
-      params:
-      - name: IMAGE
-        value: $(params.output-image)-arm64
-      - name: DOCKERFILE
-        value: $(params.dockerfile)
-      - name: CONTEXT
-        value: $(params.path-context)
-      - name: HERMETIC
-        value: $(params.hermetic)
-      - name: PREFETCH_INPUT
-        value: $(params.prefetch-input)
-      - name: IMAGE_EXPIRES_AFTER
-        value: $(params.image-expires-after)
-      - name: COMMIT_SHA
-        value: $(tasks.clone-repository.results.commit)
-      - name: PLATFORM
-        value: linux/arm64
-      runAfter:
-      - clone-repository-arm64
-      taskRef:
-        params:
-        - name: name
-          value: buildah
-        - name: bundle
-          value: quay.io/redhat-appstudio-tekton-catalog/task-buildah:0.1@sha256:7e5f19d3aa233b9becf90d1ca01697486dc1acb1f1d6d2a0b8d1a1cc07c66249
-        - name: kind
-          value: task
-        resolver: bundles
-      when:
-      - input: $(tasks.init.results.build)
-        operator: in
-        values:
-        - "true"
-      workspaces:
-      - name: source
-        workspace: workspace-arm64
-    - name: build-container
-      params:
-        - name: IMAGE
-          value: $(params.output-image)
-        - name: COMMIT_SHA
-          value: $(tasks.clone-repository.results.commit)
-        - name: IMAGES
-          value:
-            - $(tasks.build-container-amd64.results.IMAGE_URL)@$(tasks.build-container-amd64.results.IMAGE_DIGEST)
-            - $(tasks.build-container-arm64.results.IMAGE_URL)@$(tasks.build-container-arm64.results.IMAGE_DIGEST)
-      runAfter:
-        - build-container-amd64
-        - build-container-arm64
-      taskRef:
-        params:
-          - name: name
-            value: build-image-manifest
-          - name: bundle
-            value: quay.io/redhat-appstudio-tekton-catalog/task-build-image-manifest:0.1@sha256:4f8da0144ac88fb8139d3f60c40b64db02a5bf8bdd3f500f22389de80c7807c8
-          - name: kind
-            value: task
-        resolver: bundles
-      when:
-        - input: $(tasks.init.results.build)
-          operator: in
-          values:
-            - "true"
     - name: build-source-image
       params:
       - name: BINARY_IMAGE
@@ -403,7 +307,27 @@ spec:
         - name: name
           value: clair-scan
         - name: bundle
-          value: quay.io/redhat-appstudio-tekton-catalog/task-clair-scan:0.1@sha256:c703ded1a7cc731b357785a1a3da1c924adcf3bf89aadfb7cf0a97e85cf06e62
+          value: quay.io/redhat-appstudio-tekton-catalog/task-clair-scan:0.1@sha256:1455df3ae446fd2205e6e3457310acbf2eb9754e08f1ee9e43520fd76689c495
+        - name: kind
+          value: task
+        resolver: bundles
+      when:
+      - input: $(params.skip-checks)
+        operator: in
+        values:
+        - "false"
+    - name: ecosystem-cert-preflight-checks
+      params:
+      - name: image-url
+        value: $(tasks.build-container.results.IMAGE_URL)
+      runAfter:
+      - build-container
+      taskRef:
+        params:
+        - name: name
+          value: ecosystem-cert-preflight-checks
+        - name: bundle
+          value: quay.io/redhat-appstudio-tekton-catalog/task-ecosystem-cert-preflight-checks:0.1@sha256:b6c1276b983d7ec6f8cf250056e904887f519bb6e54d538525f6314b681bd728
         - name: kind
           value: task
         resolver: bundles
@@ -420,7 +344,7 @@ spec:
         - name: name
           value: sast-snyk-check
         - name: bundle
-          value: quay.io/redhat-appstudio-tekton-catalog/task-sast-snyk-check:0.1@sha256:1d77f84075af5d7649a689a2695f2a8ee19aef3df4e4fc3bd4cfdd0ccda402c8
+          value: quay.io/redhat-appstudio-tekton-catalog/task-sast-snyk-check:0.1@sha256:422177f6fffa55284a30ddc4a26dca1462aee34a479529b9e2b52a5bb39606a4
         - name: kind
           value: task
         resolver: bundles
@@ -445,7 +369,7 @@ spec:
         - name: name
           value: clamav-scan
         - name: bundle
-          value: quay.io/redhat-appstudio-tekton-catalog/task-clamav-scan:0.1@sha256:e6c1e821dc0d2558b2ee46cd14a53ae79d48218d689caa1a2fa671fbf3a06019
+          value: quay.io/redhat-appstudio-tekton-catalog/task-clamav-scan:0.1@sha256:fbdd8b4ca9235f73d630d5a71c71d1042bbe7971eefba081dea827b6ee489c19
         - name: kind
           value: task
         resolver: bundles
@@ -467,7 +391,7 @@ spec:
         - name: name
           value: sbom-json-check
         - name: bundle
-          value: quay.io/redhat-appstudio-tekton-catalog/task-sbom-json-check:0.1@sha256:e68efb23e98d580522ef4763da42434a31c28059502c8244be143ff2b20e657d
+          value: quay.io/redhat-appstudio-tekton-catalog/task-sbom-json-check:0.1@sha256:83441b9688d6921c832e7424c446fdfd4e62ee844dfe4000b97fa2f1726ecd42
         - name: kind
           value: task
         resolver: bundles
@@ -483,17 +407,6 @@ spec:
   taskRunTemplate: {}
   workspaces:
   - name: workspace
-    volumeClaimTemplate:
-      metadata:
-        creationTimestamp: null
-      spec:
-        accessModes:
-        - ReadWriteOnce
-        resources:
-          requests:
-            storage: 1Gi
-      status: {}
-  - name: workspace-arm64
     volumeClaimTemplate:
       metadata:
         creationTimestamp: null
