@@ -1,6 +1,6 @@
 # golden-container
 
-Trivial definition of a multi-arch image build in compliance with Enterprise Contract policy
+Trivial definition of a multi-arch image build (amd64/arm64) in compliance with Enterprise Contract policy
 
 The latest built image is available at `quay.io/redhat-appstudio/ec-golden-image:latest`.
 
