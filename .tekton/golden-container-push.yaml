@@ -134,7 +134,7 @@ spec:
       value: $(tasks.clone-repository.results.commit)
     - description: ""
       name: JAVA_COMMUNITY_DEPENDENCIES
-      value: $(tasks.build-container.results.JAVA_COMMUNITY_DEPENDENCIES)
+      value: $(tasks.build-container-amd64.results.JAVA_COMMUNITY_DEPENDENCIES)
     tasks:
     - name: init
       params:
@@ -209,10 +209,10 @@ spec:
       workspaces:
       - name: source
         workspace: workspace
-    - name: build-container
+    - name: build-container-amd64
       params:
       - name: IMAGE
-        value: $(params.output-image)
+        value: $(params.output-image)-amd64
       - name: DOCKERFILE
         value: $(params.dockerfile)
       - name: CONTEXT
@@ -225,6 +225,8 @@ spec:
         value: $(params.image-expires-after)
       - name: COMMIT_SHA
         value: $(tasks.clone-repository.results.commit)
+      - name: PLATFORM
+        value: linux/amd64
       runAfter:
       - prefetch-dependencies
       taskRef:
@@ -244,12 +246,76 @@ spec:
       workspaces:
       - name: source
         workspace: workspace
+    - name: build-container-arm64
+      params:
+      - name: IMAGE
+        value: $(params.output-image)-arm64
+      - name: DOCKERFILE
+        value: $(params.dockerfile)
+      - name: CONTEXT
+        value: $(params.path-context)
+      - name: HERMETIC
+        value: $(params.hermetic)
+      - name: PREFETCH_INPUT
+        value: $(params.prefetch-input)
+      - name: IMAGE_EXPIRES_AFTER
+        value: $(params.image-expires-after)
+      - name: COMMIT_SHA
+        value: $(tasks.clone-repository.results.commit)
+      - name: PLATFORM
+        value: linux/arm64
+      runAfter:
+      - clone-repository
+      taskRef:
+        params:
+        - name: name
+          value: buildah-remote
+        - name: bundle
+          value: quay.io/redhat-appstudio-tekton-catalog/task-buildah-remote:0.1@sha256:4a71a623955ab032f41063771b577d9021796fcb7a39347acb1b27d34f85db69
+        - name: kind
+          value: task
+        resolver: bundles
+      when:
+      - input: $(tasks.init.results.build)
+        operator: in
+        values:
+        - "true"
+      workspaces:
+      - name: source
+        workspace: workspace
+    - name: build-container
+      params:
+        - name: IMAGE
+          value: $(params.output-image)
+        - name: COMMIT_SHA
+          value: $(tasks.clone-repository.results.commit)
+        - name: IMAGES
+          value:
+            - $(tasks.build-container-amd64.results.IMAGE_URL)@$(tasks.build-container-amd64.results.IMAGE_DIGEST)
+            - $(tasks.build-container-arm64.results.IMAGE_URL)@$(tasks.build-container-arm64.results.IMAGE_DIGEST)
+      runAfter:
+        - build-container-amd64
+        - build-container-arm64
+      taskRef:
+        params:
+          - name: name
+            value: build-image-manifest
+          - name: bundle
+            value: quay.io/redhat-appstudio-tekton-catalog/task-build-image-manifest:0.1@sha256:4f8da0144ac88fb8139d3f60c40b64db02a5bf8bdd3f500f22389de80c7807c8
+          - name: kind
+            value: task
+        resolver: bundles
+      when:
+        - input: $(tasks.init.results.build)
+          operator: in
+          values:
+            - "true"
     - name: build-source-image
       params:
       - name: BINARY_IMAGE
         value: $(params.output-image)
       - name: BASE_IMAGES
-        value: $(tasks.build-container.results.BASE_IMAGES_DIGESTS)
+        value: $(tasks.build-container-amd64.results.BASE_IMAGES_DIGESTS)
       runAfter:
       - build-container
       taskRef:
@@ -276,7 +342,7 @@ spec:
     - name: deprecated-base-image-check
       params:
       - name: BASE_IMAGES_DIGESTS
-        value: $(tasks.build-container.results.BASE_IMAGES_DIGESTS)
+        value: $(tasks.build-container-amd64.results.BASE_IMAGES_DIGESTS)
       - name: IMAGE_URL
         value: $(tasks.build-container.results.IMAGE_URL)
       - name: IMAGE_DIGEST
