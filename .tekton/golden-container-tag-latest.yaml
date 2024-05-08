@@ -53,4 +53,4 @@ spec:
                 echo
                 echo ${SRC_REF} has been pushed, copying to ${TARGET_REF}
 
-                skopeo copy docker://${SRC_REF} docker://${TARGET_REF}
+                skopeo copy docker://${SRC_REF} docker://${TARGET_REF} --all
