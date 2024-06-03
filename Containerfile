@@ -5,7 +5,7 @@ ARG TARGETARCH
 ARG BUILD_DATE
 
 LABEL name="Enterprise Contract Golden Container" \
-      vendor="Enterprise Contract" \
+      vendor="Red Hat, Inc." \
       maintainer="hacbs-contract@redhat.com" \
       version="1" \
       release="1" \
