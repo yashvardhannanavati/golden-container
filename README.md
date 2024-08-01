@@ -3,7 +3,7 @@
 Trivial definition of a multi-arch image build (amd64/arm64) in compliance with Enterprise Contract
 policy.
 
-The latest built image is available at `quay.io/redhat-appstudio/ec-golden-image:latest`.
+The latest released image is available at `quay.io/konflux-ci/ec-golden-image:latest`.
 
 The image is signed and attested by Tekton Chains. For verification, use the in-cluster public key:
 `k8s://openshift-pipelines/public-key`.
