@@ -399,6 +399,28 @@ spec:
           operator: in
           values:
             - "false"
+    - name: verify-signed-rpms
+      params:
+        - name: INPUT
+          value: $(tasks.build-container.results.IMAGE_URL)@$(tasks.build-container.results.IMAGE_DIGEST)
+        - name: FAIL_UNSIGNED
+          value: "false"
+      runAfter:
+        - build-container
+      taskRef:
+        params:
+          - name: name
+            value: verify-signed-rpms
+          - name: bundle
+            value: quay.io/konflux-ci/tekton-catalog/task-verify-signed-rpms:0.1@sha256:aa7a9212beb45e43e7b17807d8ad607b0425f7621ac92ccb93cc401670500de2
+          - name: kind
+            value: task
+        resolver: bundles
+      when:
+        - input: $(params.skip-checks)
+          operator: in
+          values:
+            - "false"
     - name: sbom-json-check
       params:
         - name: IMAGE_URL
