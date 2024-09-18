@@ -67,10 +67,6 @@ spec:
       description: Skip checks against built image
       name: skip-checks
       type: string
-    - default: "true"
-      description: Skip optional checks, set false if you want to run optional checks
-      name: skip-optional
-      type: string
     - default: "false"
       description: Execute the build with network isolation
       name: hermetic
@@ -86,6 +82,7 @@ spec:
     - default: ""
       description: Image tag expiration time, time values could be something like 1h, 2d, 3w for hours, days, and weeks, respectively.
       name: image-expires-after
+      type: string
     - default: "false"
       description: Build a source image.
       name: build-source-image
@@ -115,12 +112,6 @@ spec:
           value: $(params.rebuild)
         - name: skip-checks
           value: $(params.skip-checks)
-        - name: skip-optional
-          value: $(params.skip-optional)
-        - name: pipelinerun-name
-          value: $(context.pipelineRun.name)
-        - name: pipelinerun-uid
-          value: $(context.pipelineRun.uid)
       taskRef:
         params:
           - name: name
@@ -196,8 +187,6 @@ spec:
           value: $(params.image-expires-after)
         - name: COMMIT_SHA
           value: $(tasks.clone-repository.results.commit)
-        - name: PLATFORM
-          value: linux/amd64
       runAfter:
         - prefetch-dependencies
       taskRef:
@@ -322,6 +311,26 @@ spec:
             value: deprecated-image-check
           - name: bundle
             value: quay.io/konflux-ci/tekton-catalog/task-deprecated-image-check:0.4@sha256:592bbced9d8529c5391ecd3464a2276d25946514fe0b4fd91f2cdbe5730aa732
+          - name: kind
+            value: task
+        resolver: bundles
+      when:
+        - input: $(params.skip-checks)
+          operator: in
+          values:
+            - "false"
+    - name: rpms-signature-scan
+      params:
+        - name: INPUT
+          value: $(tasks.build-container.results.IMAGE_URL)@$(tasks.build-container.results.IMAGE_DIGEST)
+      runAfter:
+        - build-container
+      taskRef:
+        params:
+          - name: name
+            value: rpms-signature-scan
+          - name: bundle
+            value: quay.io/konflux-ci/tekton-catalog/task-rpms-signature-scan:0.1@sha256:4d41fc55212c29b86ef2fbce6e32f5259c7551dd2dcbd65409eb7f08bc972e7b
           - name: kind
             value: task
         resolver: bundles
